@@ -1,0 +1,84 @@
+--RR－ファジー・レイニアス
+local s,id=GetID()
+function s.initial_effect(c)
+	local e2=Effect.CreateEffect(c)
+	e2:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
+	e2:SetCode(EVENT_TO_GRAVE)
+	e2:SetProperty(EFFECT_FLAG_DELAY)
+	e2:SetTarget(s.target)
+	e2:SetOperation(s.operation)
+	c:RegisterEffect(e2)
+end
+function s.filter(c,tp,eg,ep,ev,re,r,rp)
+	local te=c:GetActivateEffect()
+	if not te then return false end
+	local condition=te:GetCondition()
+	local cost=te:GetCost()
+	local target=te:GetTarget()
+	return c:IsSpell() and c:IsType(TYPE_CONTINUOUS) and (not condition or condition(te,tp,eg,ep,ev,re,r,rp)) 
+		and (not cost or cost(te,tp,eg,ep,ev,re,r,rp,0))
+		and (not target or target(te,tp,eg,ep,ev,re,r,rp,0))
+end
+function s.target(e,tp,eg,ep,ev,re,r,rp,chk)
+	local ct=0
+	if e:GetHandler():IsLocation(LOCATION_HAND) then ct=ct+1 end
+	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_SZONE)>ct
+		and Duel.IsExistingMatchingCard(s.filter,tp,LOCATION_DECK,0,1,nil,tp,eg,ep,ev,re,r,rp) end
+end
+function s.operation(e,tp,eg,ep,ev,re,r,rp)
+	if Duel.GetLocationCount(tp,LOCATION_SZONE)<=0 then return end
+	local sg=Duel.GetMatchingGroup(s.filter,tp,LOCATION_DECK,0,nil,tp,eg,ep,ev,re,r,rp)
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_EFFECT)
+	local g=sg:Select(tp,1,1,nil)
+	if #g>0 then
+		local tc=g:GetFirst()
+		local tpe=tc:GetType()
+		local te=tc:GetActivateEffect()
+		if te then
+			local con=te:GetCondition()
+			local co=te:GetCost()
+			local tg=te:GetTarget()
+			local op=te:GetOperation()
+			Duel.ClearTargetCard()
+			e:SetCategory(te:GetCategory())
+			e:SetProperty(te:GetProperty())
+			if tpe&TYPE_FIELD~=0 then
+				local fc=Duel.GetFieldCard(1-tp,LOCATION_FZONE,0)
+				if Duel.IsDuelType(DUEL_1_FIELD) then
+					if fc then Duel.Destroy(fc,REASON_RULE) end
+					fc=Duel.GetFieldCard(tp,LOCATION_FZONE,0)
+					if fc and Duel.Destroy(fc,REASON_RULE)==0 then Duel.SendtoGrave(tc,REASON_RULE) end
+				else
+					fc=Duel.GetFieldCard(tp,LOCATION_FZONE,0)
+					if fc and Duel.SendtoGrave(fc,REASON_RULE)==0 then Duel.SendtoGrave(tc,REASON_RULE) end
+				end
+			end
+			Duel.MoveToField(tc,tp,tp,LOCATION_SZONE,POS_FACEUP,true)
+			Duel.Hint(HINT_CARD,0,tc:GetCode())
+			tc:CreateEffectRelation(te)
+			if tpe&TYPE_EQUIP+TYPE_CONTINUOUS+TYPE_FIELD==0 then
+				tc:CancelToGrave(false)
+			end
+			if co then co(te,tp,eg,ep,ev,re,r,rp,1) end
+			if tg then tg(te,tp,eg,ep,ev,re,r,rp,1) end
+			local g=Duel.GetChainInfo(0,CHAININFO_TARGET_CARDS)
+			if g then
+				local etc=g:GetFirst()
+				while etc do
+					etc:CreateEffectRelation(te)
+					etc=g:GetNext()
+				end
+			end
+			Duel.BreakEffect()
+			if op then op(te,tp,eg,ep,ev,re,r,rp) end
+			tc:ReleaseEffectRelation(te)
+			if etc then
+				etc=g:GetFirst()
+				while etc do
+					etc:ReleaseEffectRelation(te)
+					etc=g:GetNext()
+				end
+			end
+		end
+	end
+end
